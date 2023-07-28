@@ -10,6 +10,7 @@
 static int brightness; // 明るさ
 static int color; // 色
 static int location; // 光らせる場所
+static int locs[8];
 // module_param(brightness, int, S_IRUGO);
 // module_param(color, int, S_IRUGO);
 // module_param(location, int, S_IRUGO);
@@ -136,6 +137,8 @@ static void led_exit(void) {
 static int module_open(struct inode *inode, struct file *file)
 {
     // printk(KERN_INFO "Device Opens\n");
+    int minor = iminor(inode);
+    file->private_data = (void *)minor;
     return 0;
 }
 static int module_close(struct inode *inode, struct file *file)
@@ -151,24 +154,49 @@ static ssize_t module_read(struct file *file, char __user *buf, size_t count, lo
     // printk(KERN_INFO "Device Reads\n");
     if (count > NUM_BUFFER) count = NUM_BUFFER;
 
-    if (copy_to_user(buf, &prev_input, 1) != 0) {
+    int minor = (int)file->private_data;
+    // locationをbufに格納する
+    if (minor == 0) {
+      if (copy_to_user(buf, (char*)&location, 1) != 0) {
+          return -EFAULT;
+      }
+    } else {
+      if (copy_to_user(buf, (char*)&locs[minor-1], 1) != 0) {
         return -EFAULT;
+      }
     }
-    // printk(KERN_INFO "Input[0]: %c", prev_input);
     return count;
 }
 static ssize_t module_write(struct file *file, const char __user *buf, size_t count, loff_t *f_ops)
 {
     // printk(KERN_INFO "Device Writes\n");
-    if (copy_from_user(&prev_input, buf, 1) != 0) {
+    if (copy_from_user(&prev_input, buf, count) != 0) {
         return -EFAULT;
     }
+
+    int minor = (int)file->private_data;
     // printk(KERN_INFO "Input[0]: %c", prev_input);
 
     // bufはchar型なので、その値を0-255の値に対応する、位置にledをつける
     // bufはchar型なので、int型に変換すると0-255の間の値を取る
-    location = (int)*buf;
-    flash(brightness, color, location);
+    if (minor == 0) {
+      location = (int)*buf;
+      flash(brightness, color, location);
+    } else {
+      // minor > 0の場合bufは0 or 1のみ
+      // location ^= (1<<(minor-1)) ^ buf;
+      locs[minor-1] = buf;
+
+      if (buf == 0) {
+        // 消灯
+        location &= ~(1 << (minor-1));
+      } else {
+        // 点灯
+        location |= (1 << (minor-1));
+      }
+
+      flash(brightness, color, location);
+    }
     return count;
 }
 
@@ -180,17 +208,19 @@ struct file_operations module_fops = {
     .write = module_write,
 };
 
-struct cdev *cdev;
+struct cdev *cdev[9];
 static int io_init(void) {
     printk(KERN_INFO "Hello World\n");
 
-    dev_t dev = MKDEV(238, 0);
-    register_chrdev_region(dev, 1, "dev_io");
-    cdev = cdev_alloc();
-    cdev_init(cdev, &module_fops);
-    int err = cdev_add(cdev, dev, 1);
-    if (err != 0) {
-        printk("ERROR: cdev add\n");
+    for (int i = 0; i < 9; i++) {
+      dev_t dev = MKDEV(238, i);
+      register_chrdev_region(dev, 1, "dev_io");
+      cdev[i] = cdev_alloc();
+      cdev_init(cdev[i], &module_fops);
+      int err = cdev_add(cdev[i], dev, 1);
+      if (err != 0) {
+          printk("ERROR: cdev add\n");
+      }
     }
     return 0;
 }
