@@ -1,1 +1,0 @@
-savedcmd_/home/funera1/fun/it-arch/led_by_input/io.o := aarch64-linux-gnu-ld -EL  -maarch64elf -z noexecstack   -r -o /home/funera1/fun/it-arch/led_by_input/io.o @/home/funera1/fun/it-arch/led_by_input/io.mod 

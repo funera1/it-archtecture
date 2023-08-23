@@ -1,10 +1,10 @@
-l-objs := led.o
-obj-m := l.o
+syscall_handler-objs := module.o
+obj-m := syscall_handler.o
 
 all:
 	make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
-		-C ./linux M=`pwd` modules
+		-C ../linux M=`pwd` modules
 
 clean:
 	make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
-		-C ./linux M=`pwd` clean
+		-C ../linux M=`pwd` clean

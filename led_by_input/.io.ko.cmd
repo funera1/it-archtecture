@@ -1,1 +1,0 @@
-savedcmd_/home/funera1/fun/it-arch/led_by_input/io.ko := aarch64-linux-gnu-ld -r -EL  -maarch64elf -z noexecstack --build-id=sha1  -T scripts/module.lds -o /home/funera1/fun/it-arch/led_by_input/io.ko /home/funera1/fun/it-arch/led_by_input/io.o /home/funera1/fun/it-arch/led_by_input/io.mod.o;  true

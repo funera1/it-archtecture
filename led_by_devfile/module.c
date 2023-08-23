@@ -4,6 +4,7 @@
 #include <linux/cdev.h>
 #include <linux/delay.h>
 #include <linux/gpio.h>
+#include <linux/mutex.h>
 
 #define NUM_BUFFER 1
 
@@ -11,10 +12,12 @@ static int brightness; // 明るさ
 static int color; // 色
 static int location; // 光らせる場所
 static int locs[8];
-// module_param(brightness, int, S_IRUGO);
-// module_param(color, int, S_IRUGO);
-// module_param(location, int, S_IRUGO);
+static DEFINE_MUTEX( my_mutex );
 
+
+// =======================================================================
+// LED操作
+// =======================================================================
 
 // val must be 0 or 1
 static int send_bit(int val)
@@ -26,13 +29,13 @@ static int send_bit(int val)
     gpio_set_value(24, 1);
 
     // 500ナノ秒待つ
-    udelay(500);
+    ndelay(500);
 
     // set 0 to clock pin
     gpio_set_value(24, 0);
 
     // 500ナノ秒待つ
-    udelay(500);
+    ndelay(500);
 
     return 0;
 }
@@ -73,6 +76,7 @@ static void __flash(int brightness, int color) {
 
 static int flash(int brightness, int color, int location)
 {
+    // printk("flash!\n");
     // 開始
     for(int i = 0; i < 32; i++) {
         send_bit(0);
@@ -91,7 +95,6 @@ static int flash(int brightness, int color, int location)
     for(int i = 0; i < 32; i++) {
         send_bit(1);
     }
-
     return 0;
 }
 
@@ -134,16 +137,17 @@ static void led_exit(void) {
 }
 
 // =======================================================================
+// システムコールハンドラ
+// =======================================================================
+
 static int module_open(struct inode *inode, struct file *file)
 {
-    // printk(KERN_INFO "Device Opens\n");
     int minor = iminor(inode);
     file->private_data = (void *)minor;
     return 0;
 }
 static int module_close(struct inode *inode, struct file *file)
 {
-    // printk(KERN_INFO "Device Closes\n");
     return 0;
 }
 
@@ -151,43 +155,51 @@ static unsigned char prev_input;
 
 static ssize_t module_read(struct file *file, char __user *buf, size_t count, loff_t *f_ops)
 {
-    // printk(KERN_INFO "Device Reads\n");
-    if (count > NUM_BUFFER) count = NUM_BUFFER;
+    // mutex
+    if (mutex_lock_interruptible( &my_mutex ) != 0) {
+      return -1;
+    }
 
+    count = min(count, (size_t)1);
     int minor = (int)file->private_data;
-    // locationをbufに格納する
     if (minor == 0) {
-      if (copy_to_user(buf, (char*)&location, 1) != 0) {
+      // read from location
+      if (copy_to_user(buf, (char*)&location, count) != 0) {
           return -EFAULT;
       }
     } else {
-      if (copy_to_user(buf, (char*)&locs[minor-1], 1) != 0) {
+      if (copy_to_user(buf, (char*)&locs[minor-1], count) != 0) {
         return -EFAULT;
       }
     }
+
+    // unmutex
+    mutex_unlock( &my_mutex );
     return count;
 }
 static ssize_t module_write(struct file *file, const char __user *buf, size_t count, loff_t *f_ops)
 {
-    // printk(KERN_INFO "Device Writes\n");
-    if (copy_from_user(&prev_input, buf, count) != 0) {
-        return -EFAULT;
+    // mutex
+    if (mutex_lock_interruptible( &my_mutex ) != 0) {
+      return -1;
     }
 
+    count = min(count, (size_t)1);
     int minor = (int)file->private_data;
-    // printk(KERN_INFO "Input[0]: %c", prev_input);
-
-    // bufはchar型なので、その値を0-255の値に対応する、位置にledをつける
-    // bufはchar型なので、int型に変換すると0-255の間の値を取る
     if (minor == 0) {
-      location = (int)*buf;
+      if (copy_from_user(&location, buf, count) != 0) {
+        return -EFAULT;
+      }
       flash(brightness, color, location);
     } else {
       // minor > 0の場合bufは0 or 1のみ
-      // location ^= (1<<(minor-1)) ^ buf;
-      locs[minor-1] = buf;
+      if (copy_from_user(&locs[minor-1], buf, count) != 0) {
+        return -EFAULT;
+      }
 
-      if (buf == 0) {
+      printk("minor = %d\nlocs[minor-1] = %d\nlocation = %d\n", minor, locs[minor-1], location);
+      // 入力からlocationを更新
+      if (locs[minor-1] == 0) {
         // 消灯
         location &= ~(1 << (minor-1));
       } else {
@@ -197,6 +209,9 @@ static ssize_t module_write(struct file *file, const char __user *buf, size_t co
 
       flash(brightness, color, location);
     }
+
+    // unmutex
+    mutex_unlock( &my_mutex );
     return count;
 }
 
@@ -208,13 +223,17 @@ struct file_operations module_fops = {
     .write = module_write,
 };
 
+// =======================================================================
+// main
+// =======================================================================
+
 struct cdev *cdev[9];
 static int io_init(void) {
     printk(KERN_INFO "Hello World\n");
 
     for (int i = 0; i < 9; i++) {
       dev_t dev = MKDEV(238, i);
-      register_chrdev_region(dev, 1, "dev_io");
+      register_chrdev_region(dev, i, "dev_io");
       cdev[i] = cdev_alloc();
       cdev_init(cdev[i], &module_fops);
       int err = cdev_add(cdev[i], dev, 1);

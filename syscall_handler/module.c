@@ -24,9 +24,6 @@ static ssize_t module_read(struct file *file, char __user *buf, size_t count, lo
     printk(KERN_INFO "Device Reads\n");
     if (count > NUM_BUFFER) count = NUM_BUFFER;
 
-    // if (copy_to_user(buf, prev_input, 1) != 0) {
-    //     return -EFAULT;
-    // }
     printk(KERN_INFO "Input[0]: %c", prev_input);
     return count;
 }

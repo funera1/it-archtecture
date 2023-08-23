@@ -1,1 +1,0 @@
-savedcmd_/home/funera1/fun/it-arch/led_by_input/io.mod := printf '%s\n'   module.o | awk '!x[$$0]++ { print("/home/funera1/fun/it-arch/led_by_input/"$$0) }' > /home/funera1/fun/it-arch/led_by_input/io.mod

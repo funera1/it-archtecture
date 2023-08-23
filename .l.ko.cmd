@@ -1,1 +1,0 @@
-savedcmd_/home/funera1/fun/it-arch/l.ko := aarch64-linux-gnu-ld -r -EL  -maarch64elf -z noexecstack --build-id=sha1  -T scripts/module.lds -o /home/funera1/fun/it-arch/l.ko /home/funera1/fun/it-arch/l.o /home/funera1/fun/it-arch/l.mod.o;  true

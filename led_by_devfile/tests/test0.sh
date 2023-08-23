@@ -1,3 +1,4 @@
+# デバイスファイル0(8つのLEDを一括で操作するためのファイル)に対するテスト
 ./flicker ./blinkt_dev0 1 100 & \
 ./flicker ./blinkt_dev0 2 100 & \
 ./flicker ./blinkt_dev0 3 100 & \
